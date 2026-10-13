@@ -15,5 +15,4 @@ with CSV and Excel downloads.
 
 ## Using it
 - Paste one or more profiles (one after another) and click "Extract details".
-- Optionally add your list of numbers: any without a pasted profile show as "Not found".
 - Please check AHPRA's website terms, and ask them for written consent if in doubt.

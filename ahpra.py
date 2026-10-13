@@ -5,13 +5,14 @@ register themselves, selects all (Ctrl+A), copies and pastes the text here. This
 pulls the needed fields out of that pasted text.
 """
 import re
+from datetime import date, datetime
 
 COLUMNS = [
-    "Registration number",
     "Result",
     "Name",
-    "Profession",
+    "Registration number",
     "Registration status",
+    "Profession",
     "Date of first registration",
     "Suburb",
     "State",
@@ -27,6 +28,7 @@ TITLES = {
 # A line like "No. NMW0002122705" marks the top of each profile
 ANCHOR = re.compile(r"^No\.\s*([A-Z]{3}\d{10})$")
 DATE = re.compile(r"\b\d{1,2}/\d{1,2}/\d{4}\b")
+DIVISION = re.compile(r"^division/registration type\s*[-\u2013\u2014:]\s*(.+)$", re.I)
 
 # Lines that start a new section (used to know where a "Conditions" block ends)
 SECTION_HEADS = {
@@ -90,7 +92,18 @@ def _parse_block(block, number, rel):
     prof = _value(block, "profession")
     if not prof and heading >= 0 and heading + 2 < rel:
         prof = block[heading + 2]
-    row["Profession"] = prof
+    divisions = []
+    for line in block:
+        m = DIVISION.match(line)
+        if m:
+            kind = re.split(r"\s*\(|,", m.group(1), maxsplit=1)[0].strip()
+            if kind and kind not in divisions:
+                divisions.append(kind)
+    if divisions:
+        row["Profession"] = " / ".join(divisions)
+    else:
+        row["Profession"] = prof
+        notes.append("Division/Registration Type not found")
 
     row["Registration status"] = _value(block, "registration status")
 
@@ -198,3 +211,27 @@ def parse_numbers(text):
             seen.add(tok)
             out.append(tok)
     return out
+
+
+# --------------------------------------------------------------------------
+# Quarter flagging
+# --------------------------------------------------------------------------
+QUARTERS = [
+    ("Oct - Dec 2025", date(2025, 10, 1)),
+    ("Jan - Mar 2026", date(2026, 1, 1)),
+    ("Apr - Jun 2026", date(2026, 4, 1)),
+    ("Jul - Sep 2026", date(2026, 7, 1)),
+]
+
+
+def parse_date(text):
+    try:
+        return datetime.strptime((text or "").strip(), "%d/%m/%Y").date()
+    except ValueError:
+        return None
+
+
+def registered_in_or_after(date_text, quarter_start):
+    """True if the first registration date is during or after the quarter (i.e. on/after its start)."""
+    d = parse_date(date_text)
+    return bool(quarter_start and d and d >= quarter_start)

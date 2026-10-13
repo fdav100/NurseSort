@@ -93,14 +93,15 @@ st.markdown(
 )
 
 quarter_options = {"None (no quarter flagging)": None}
-quarter_options.update({label: start for label, start in ahpra.QUARTERS})
+quarter_options.update({label: (start, end) for label, start, end in ahpra.QUARTERS})
 quarter_label = st.selectbox(
     "Quarter of work",
     list(quarter_options),
     help="First registration dates during or after the selected quarter are highlighted "
          "(yellow fill, red font).",
 )
-quarter_start = quarter_options[quarter_label]
+quarter = quarter_options[quarter_label]
+quarter_start, quarter_end = quarter if quarter else (None, None)
 
 with st.form("extract"):
     pasted = st.text_area(
@@ -130,6 +131,11 @@ if st.session_state.no_profiles:
 
 df = pd.DataFrame(st.session_state.rows, columns=ahpra.COLUMNS)
 if not df.empty:
+    df["Registered at start of Period"] = [
+        ahpra.registered_at_start_of_period(d, quarter_start, quarter_end)
+        if res == "Found" else ""
+        for d, res in zip(df["Date of first registration"], df["Result"])
+    ]
     if st.session_state.dupes:
         st.caption(f"{st.session_state.dupes} duplicate profile(s) in the paste were skipped.")
     st.dataframe(style_df(df, quarter_start), hide_index=True)

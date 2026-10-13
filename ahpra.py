@@ -12,6 +12,7 @@ COLUMNS = [
     "Name",
     "Registration number",
     "Registration status",
+    "Registered at start of Period",
     "Profession",
     "Date of first registration",
     "Suburb",
@@ -71,6 +72,25 @@ def _value(lines, label, start=0, end=None, not_values=()):
     return "" if v.lower() in not_values else v
 
 
+def _collapse_divisions(kinds):
+    """Registered nurse + Enrolled nurse on the same profile -> a single 'RN/EN'."""
+    low = [k.lower() for k in kinds]
+    is_nurse = [l.startswith(("registered nurse", "enrolled nurse")) for l in low]
+    has_rn = any(l.startswith("registered nurse") for l in low)
+    has_en = any(l.startswith("enrolled nurse") for l in low)
+    if not (has_rn and has_en):
+        return kinds
+    out, placed = [], False
+    for k, nurse in zip(kinds, is_nurse):
+        if nurse:
+            if not placed:
+                out.append("RN/EN")
+                placed = True
+        else:
+            out.append(k)
+    return out
+
+
 def _parse_block(block, number, rel):
     """block = lines for one profile; rel = index of its 'No. XXX' line within the block."""
     notes = []
@@ -100,7 +120,7 @@ def _parse_block(block, number, rel):
             if kind and kind not in divisions:
                 divisions.append(kind)
     if divisions:
-        row["Profession"] = " / ".join(divisions)
+        row["Profession"] = " / ".join(_collapse_divisions(divisions))
     else:
         row["Profession"] = prof
         notes.append("Division/Registration Type not found")
@@ -216,11 +236,11 @@ def parse_numbers(text):
 # --------------------------------------------------------------------------
 # Quarter flagging
 # --------------------------------------------------------------------------
-QUARTERS = [
-    ("Oct - Dec 2025", date(2025, 10, 1)),
-    ("Jan - Mar 2026", date(2026, 1, 1)),
-    ("Apr - Jun 2026", date(2026, 4, 1)),
-    ("Jul - Sep 2026", date(2026, 7, 1)),
+QUARTERS = [  # (label, first day, last day)
+    ("Oct - Dec 2025", date(2025, 10, 1), date(2025, 12, 31)),
+    ("Jan - Mar 2026", date(2026, 1, 1), date(2026, 3, 31)),
+    ("Apr - Jun 2026", date(2026, 4, 1), date(2026, 6, 30)),
+    ("Jul - Sep 2026", date(2026, 7, 1), date(2026, 9, 30)),
 ]
 
 
@@ -235,3 +255,18 @@ def registered_in_or_after(date_text, quarter_start):
     """True if the first registration date is during or after the quarter (i.e. on/after its start)."""
     d = parse_date(date_text)
     return bool(quarter_start and d and d >= quarter_start)
+
+
+def registered_at_start_of_period(date_text, start, end):
+    """'Yes' if first registered before the quarter, 'No' if after it, 'Check' if during it
+    (or the date can't be read). Blank if no quarter is selected."""
+    if not start:
+        return ""
+    d = parse_date(date_text)
+    if d is None:
+        return "Check"
+    if d < start:
+        return "Yes"
+    if d > end:
+        return "No"
+    return "Check"
